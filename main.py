@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (
     QLabel,
     QHBoxLayout,
 )
-from PyQt5.QtCore import Qt, QStandardPaths
+from PyQt5.QtCore import Qt, QStandardPaths, QTimer, QPoint
 from PyQt5.QtGui import QFont, QCursor
 
 
@@ -67,7 +67,11 @@ class SnapMemo(QMainWindow):
         # 加载数据并初始化界面
         self.current_content = self._load_data()
         self._setup_ui()
-        self._center_on_screen()
+
+        # 自动保存定时器 (30分钟 = 30 * 60 * 1000 毫秒)
+        self.auto_save_timer = QTimer(self)
+        self.auto_save_timer.timeout.connect(self._save_data)
+        self.auto_save_timer.start(30 * 60 * 1000)
 
     def _get_config_path(self) -> Path:
         """获取跨平台的配置文件路径"""
@@ -142,7 +146,7 @@ class SnapMemo(QMainWindow):
         layout.addWidget(self.text_edit)
         return widget
 
-    def _center_on_screen(self):
+    def _on_screen(self):
         """将窗口定位到屏幕右侧居中"""
         screen = QApplication.primaryScreen().geometry()
         x = screen.width() - self.width() - 20
@@ -157,7 +161,14 @@ class SnapMemo(QMainWindow):
             if self.config_path.exists():
                 with open(self.config_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                    return data.get("content", self.DEFAULT_CONTENT)
+                    content = data.get("content", self.DEFAULT_CONTENT)
+                    x = data.get("x")
+                    y = data.get("y")
+                    if x is not None and y is not None:
+                        self.move(x, y)
+                    else:
+                        self._on_screen()
+                return content
         except Exception as e:
             print(f"[SnapMemo] Load Error: {e}")
         return self.DEFAULT_CONTENT
@@ -165,9 +176,15 @@ class SnapMemo(QMainWindow):
     def _save_data(self):
         """将当前内容保存到 JSON 文件"""
         content = self.text_edit.toPlainText()
+        pos = self.pos()
         try:
             with open(self.config_path, "w", encoding="utf-8") as f:
-                json.dump({"content": content}, f, ensure_ascii=False, indent=2)
+                json.dump(
+                    {"content": content, "x": pos.x(), "y": pos.y()},
+                    f,
+                    ensure_ascii=False,
+                    indent=2,
+                )
         except Exception as e:
             print(f"[SnapMemo] Save Error: {e}")
 
