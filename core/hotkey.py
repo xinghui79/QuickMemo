@@ -2,7 +2,6 @@ import ctypes
 import ctypes.wintypes
 from PyQt5.QtCore import QAbstractNativeEventFilter
 
-# Windows API 常量
 MOD_ALT = 0x0001
 VK_M = 0x4D
 WM_HOTKEY = 0x0312

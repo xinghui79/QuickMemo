@@ -12,7 +12,7 @@ class QuickMemo(QMainWindow):
     WINDOW_WIDTH = 250
     WINDOW_HEIGHT = 180
 
-    # === 样式表 (Stylesheets) ===
+    # === 样式表 ===
     STYLE_TITLE_BAR = """
         background-color: #333333;
         border-top-left-radius: 8px;
@@ -61,14 +61,15 @@ class QuickMemo(QMainWindow):
     """
     STYLE_CONTENT_AREA = """
         QWidget#content_container {
-            background-color: #FFFFE0;
-            border: 1px solid #FFD700;
+            background-color: #FAFAD2;
+            border: 1px solid #BDB76B;
+            color: #2F4F4F;
             border-radius: 0 0 8px 8px;
             border-top: none;
         }
         QSizeGrip:hover {
             background-color: rgba(0, 0, 0, 0.05);
-            border: 2px solid #FFD700;
+            border: 2px solid #BDB76B;
             border-top: none;
             border-left: none;
         }
@@ -102,7 +103,7 @@ class QuickMemo(QMainWindow):
         self._drag_pos = None
         self.tray_manager = tray_manager
         self.window_id = self.tray_manager.get_next_window_id() if self.tray_manager else 1
-        self.is_pinned = False
+        self.is_pinned = True
         self.pin_btn = None
 
         self.config_path = self._get_config_path()
@@ -128,8 +129,14 @@ class QuickMemo(QMainWindow):
     def _setup_ui(self):
         """构建用户界面"""
         # 窗口基础属性
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Tool | Qt.CustomizeWindowHint)
+        self.setWindowFlags(
+            Qt.FramelessWindowHint
+            | Qt.Tool
+            | Qt.CustomizeWindowHint
+            | Qt.WindowStaysOnTopHint
+        )
         self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setWindowOpacity(0.8)
         if not self.config_path.exists():
             self.resize(self.WINDOW_WIDTH, self.WINDOW_HEIGHT)
 
@@ -162,7 +169,7 @@ class QuickMemo(QMainWindow):
                 border-bottom: 2px solid #FFD700;
             }
         """)
-        # 初始定位到右下角
+        # 缩放按钮 右下角
         self.size_grip.move(
             self.width() - self.size_grip.width(),
             self.height() - self.size_grip.height(),
@@ -172,7 +179,7 @@ class QuickMemo(QMainWindow):
     def _create_title_bar(self) -> QWidget:
         """创建自定义标题栏"""
         bar = QWidget()
-        bar.setFixedHeight(28)
+        bar.setFixedHeight(26)
         bar.setStyleSheet(self.STYLE_TITLE_BAR)
         bar.setObjectName("title_bar")
 
@@ -197,7 +204,7 @@ class QuickMemo(QMainWindow):
         self.pin_btn.setFixedSize(28, 28)
         self.pin_btn.setFont(QFont("Segoe UI Emoji", 11))
         self.pin_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        self.pin_btn.setToolTip("置顶/取消置顶")
+        self.pin_btn.setToolTip("取消置顶" if self.is_pinned else "置顶便签")
         self.pin_btn.clicked.connect(self.toggle_pin)
         # 根据加载的状态设置初始颜色
         initial_color = "#FFFFFF" if self.is_pinned else "#666666"
@@ -295,7 +302,7 @@ class QuickMemo(QMainWindow):
                 with open(self.config_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     content = data.get("content", self.DEFAULT_CONTENT)
-                    self.is_pinned = data.get("pinned", False)
+                    self.is_pinned = data.get("pinned", True)
                     if not skip_position:
                         x, y = data.get("x"), data.get("y")
                         w, h = data.get("w"), data.get("h")

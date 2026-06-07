@@ -3,7 +3,7 @@ import os
 import winreg
 
 class AutoStartManager:
-    """管理程序的开机自动启动（通过 Windows 注册表）"""
+    """管理程序的开机自动启动"""
     REG_PATH = r"Software\Microsoft\Windows\CurrentVersion\Run"
     APP_NAME = "QuickMemo"
 
