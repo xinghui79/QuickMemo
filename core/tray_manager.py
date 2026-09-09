@@ -4,16 +4,17 @@ import logging
 from pathlib import Path
 from typing import List, Optional
 
-from PyQt5.QtWidgets import (QSystemTrayIcon, QMenu, QAction, 
+from PyQt5.QtWidgets import (QSystemTrayIcon, QMenu, QAction,
                              QMessageBox, QApplication)
-from PyQt5.QtCore import (QObject, pyqtSignal, pyqtSlot, QTimer, 
-                          QPoint, QPropertyAnimation, QEasingCurve, 
+from PyQt5.QtCore import (QObject, pyqtSignal, pyqtSlot, QTimer,
+                          QPoint, QPropertyAnimation, QEasingCurve,
                           QStandardPaths)
 from PyQt5.QtGui import QIcon
 
 from core.autostart import AutoStartManager
 from core.hotkey import MOD_ALT, VK_M, HOTKEY_ID
-from utils.paths import get_resource_path
+from ui.edge_sensor import EdgeSensor
+from ui.memo_window import QuickMemo
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
@@ -47,12 +48,7 @@ class GlobalTrayManager(QObject):
         self._initialized = True
         self._running = True
         self.server_socket = None
-        
-        # 延迟导入避免循环引用
-        from ui.edge_sensor import EdgeSensor
-        from ui.memo_window import QuickMemo
-        self._QuickMemo = QuickMemo  # 缓存类引用
-        
+
         # 初始化各子模块
         self._setup_tray_icon(icon_path)
         self._setup_menu()
@@ -145,6 +141,33 @@ class GlobalTrayManager(QObject):
                 win.bring_to_front()
         self.update_sensor_visibility()
 
+    def prepare_new_session(self, show: bool = False):
+        """用完即走：清掉上次会话残留的配置，预建一张空白便签（默认隐藏待召唤）"""
+        self._wipe_session_data()
+        self._create_blank_window(show=show)
+
+    def _create_blank_window(self, show: bool):
+        """新建一张空白便签；show=False 时保持隐藏（开机预载）"""
+        offset_step = self.NEW_WINDOW_OFFSET_STEP
+        if self.windows:
+            last_window = self.windows[-1]
+            base_x, base_y = last_window.x() + offset_step, last_window.y() + offset_step
+        else:
+            screen = QApplication.primaryScreen().availableGeometry()
+            base_x = screen.right() - QuickMemo.WINDOW_WIDTH - self.SCREEN_EDGE_MARGIN
+            base_y = screen.top() + self.SCREEN_EDGE_MARGIN
+
+        new_window = QuickMemo(tray_manager=self, is_new=True)
+        new_window.move(base_x, base_y)
+        if hasattr(new_window, '_keep_on_screen'):
+            new_window._keep_on_screen()
+        if show:
+            new_window.show()
+            new_window.raise_()
+            new_window.activateWindow()
+        self.update_sensor_visibility()
+        return new_window
+
     # ================= 动画与可见性控制 =================
     
     def slide_out_all_windows(self):
@@ -185,6 +208,8 @@ class GlobalTrayManager(QObject):
         def on_slide_finished():
             win._is_sliding_in = False
             self.update_sensor_visibility()
+            # 延迟释放动画对象引用，避免每次召唤累积一个 QPropertyAnimation
+            QTimer.singleShot(0, lambda: setattr(win, "_slide_animation", None))
         animation.finished.connect(on_slide_finished)
         animation.start()
         
@@ -210,24 +235,7 @@ class GlobalTrayManager(QObject):
                     win.bring_to_front()
             return
 
-        offset_step = self.NEW_WINDOW_OFFSET_STEP
-        if self.windows:
-            last_window = self.windows[-1]
-            base_x, base_y = last_window.x() + offset_step, last_window.y() + offset_step
-        else:
-            screen = QApplication.primaryScreen().availableGeometry()
-            base_x = screen.right() - self._QuickMemo.WINDOW_WIDTH - self.SCREEN_EDGE_MARGIN
-            base_y = screen.top() + self.SCREEN_EDGE_MARGIN
-            
-        new_window = self._QuickMemo(tray_manager=self, is_new=True)
-        new_window.move(base_x, base_y)
-        if hasattr(new_window, '_keep_on_screen'):
-            new_window._keep_on_screen()
-            
-        new_window.show()
-        new_window.raise_()
-        new_window.activateWindow()
-        self.update_sensor_visibility()
+        self._create_blank_window(show=True)
 
     def on_activated(self, reason):
         if reason in (QSystemTrayIcon.Trigger, QSystemTrayIcon.DoubleClick):
@@ -261,18 +269,22 @@ class GlobalTrayManager(QObject):
         except Exception as e:
             logging.error(f"全局热键注销失败: {e}")
 
-    def _cleanup_temp_files(self):
-        """清理临时配置文件"""
+    def discard_session_data(self, *args):
+        """系统关机/注销时丢弃便签数据 (commitDataRequest 钩子)"""
+        self._wipe_session_data()
+
+    def _wipe_session_data(self):
+        """用完即走：会话结束不保留任何便签数据"""
         doc_dir = QStandardPaths.writableLocation(QStandardPaths.DocumentsLocation)
-        config_dir = Path(doc_dir) / self._QuickMemo.APP_NAME
-        
+        config_dir = Path(doc_dir) / QuickMemo.APP_NAME
+
         if config_dir.exists():
-            for file in config_dir.glob("settings_*.*"):
+            for file in config_dir.glob("settings_*"):
                 try:
                     file.unlink()
                 except Exception as e:
-                    logging.warning(f"无法删除临时文件 {file}: {e}")
-                    
+                    logging.warning(f"无法删除文件 {file}: {e}")
+
             try:
                 if not any(config_dir.iterdir()):
                     config_dir.rmdir()
@@ -280,20 +292,15 @@ class GlobalTrayManager(QObject):
                 pass
 
     def quit_app(self):
-        """安全退出应用程序"""
+        """安全退出应用程序（用完即走：不保存，直接清空）"""
         self._running = False
-        
+
         if self.server_socket:
             try: self.server_socket.close()
             except Exception: pass
-    
-        for win in self.windows:
-            if hasattr(win, "save_timer") and win.save_timer.isActive():
-                win.save_timer.stop()
-                win._save_data()
 
         self._unregister_global_hotkey()
-        self._cleanup_temp_files()
-        
+        self._wipe_session_data()
+
         self.app.quit()
 

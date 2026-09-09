@@ -1,4 +1,5 @@
 import socket
+import logging
 
 SERVER_HOST = "127.0.0.1"
 SERVER_PORT = 65479
@@ -6,12 +7,16 @@ SERVER_PORT = 65479
 def start_server(tray_manager):
     """后台线程：监听其他进程的请求"""
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server_socket.settimeout(1.0)
     tray_manager.server_socket = server_socket
-    
+
     try:
         server_socket.bind((SERVER_HOST, SERVER_PORT))
+    except OSError as e:
+        logging.error(f"端口 {SERVER_PORT} 绑定失败（可能已有实例占用）: {e}")
+        return
+
+    try:
         server_socket.listen(10)
         while tray_manager._running:
             try:

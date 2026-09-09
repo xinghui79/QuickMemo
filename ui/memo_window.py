@@ -1,4 +1,5 @@
 import json
+import logging
 from pathlib import Path
 from PyQt5.QtWidgets import (QMainWindow, QVBoxLayout, QWidget, QTextEdit, 
                              QPushButton, QLabel, QHBoxLayout, QMessageBox, 
@@ -306,20 +307,24 @@ class QuickMemo(QMainWindow):
                     if not skip_position:
                         x, y = data.get("x"), data.get("y")
                         w, h = data.get("w"), data.get("h")
+                        w = max(w, 180) if w is not None else self.WINDOW_WIDTH
+                        h = max(h, 120) if h is not None else self.WINDOW_HEIGHT
+                        self.resize(w, h)
                         if x is not None and y is not None:
+                            # 配置随 OneDrive 同步或显示器变化时，保存的坐标可能落在屏幕外
+                            screen = QApplication.primaryScreen().availableGeometry()
+                            x = max(screen.left() + 10, min(x, screen.right() - w - 10))
+                            y = max(screen.top() + 10, min(y, screen.bottom() - h - 10))
                             self.move(x, y)
-                        if w is not None and h is not None:
-                            w = max(w, 180)  # 最小宽度 180px
-                            h = max(h, 120)  # 最小高度 120px
-                            self.resize(w, h)
-                        else:
-                            self.resize(self.WINDOW_WIDTH, self.WINDOW_HEIGHT)
                     return content
         except Exception as e:
-            print(f"[Load Error] {e}")
+            logging.warning(f"[Load Error] {e}")
         return self.DEFAULT_CONTENT
 
     def _save_data(self):
+        # 滑入动画期间坐标未就位（起点在屏幕外），写入会把中间位置固化到配置
+        if getattr(self, "_is_sliding_in", False):
+            return
         content = self.text_edit.toPlainText()
         geo = self.geometry()
         temp_path = self.config_path.with_suffix(".tmp")
@@ -342,7 +347,7 @@ class QuickMemo(QMainWindow):
                 self.config_path.unlink()
             temp_path.rename(self.config_path)
         except Exception as e:
-            print(f"[Save Error] {e}")
+            logging.error(f"[Save Error] {e}")
             if temp_path.exists():
                 temp_path.unlink()
 
@@ -378,7 +383,7 @@ class QuickMemo(QMainWindow):
             if self.config_path.exists():
                 self.config_path.unlink()
         except Exception as e:
-            print(f"删除配置文件失败: {e}")
+            logging.warning(f"删除配置文件失败: {e}")
         if self.tray_manager:
             self.tray_manager.remove_window(self)
         self.deleteLater()
@@ -403,7 +408,10 @@ class QuickMemo(QMainWindow):
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.LeftButton:
+            dragged = self._drag_pos is not None
             self._drag_pos = None
+            if dragged:
+                self.save_timer.start(300)
             event.accept()
 
     def closeEvent(self, event):

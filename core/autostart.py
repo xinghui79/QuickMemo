@@ -19,10 +19,9 @@ class AutoStartManager:
     @classmethod
     def is_enabled(cls):
         try:
-            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, cls.REG_PATH, 0, winreg.KEY_READ)
-            winreg.QueryValueEx(key, cls.APP_NAME)
-            winreg.CloseKey(key)
-            return True
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, cls.REG_PATH, 0, winreg.KEY_READ) as key:
+                winreg.QueryValueEx(key, cls.APP_NAME)
+                return True
         except FileNotFoundError:
             return False
         except Exception:
@@ -31,16 +30,14 @@ class AutoStartManager:
     @classmethod
     def set_enabled(cls, enable: bool):
         try:
-            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, cls.REG_PATH, 0, winreg.KEY_SET_VALUE)
-            if enable:
-                exe_path = cls.get_exe_path()
-                winreg.SetValueEx(key, cls.APP_NAME, 0, winreg.REG_SZ, exe_path)
-            else:
-                try:
-                    winreg.DeleteValue(key, cls.APP_NAME)
-                except FileNotFoundError:
-                    pass
-            winreg.CloseKey(key)
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, cls.REG_PATH, 0, winreg.KEY_SET_VALUE) as key:
+                if enable:
+                    winreg.SetValueEx(key, cls.APP_NAME, 0, winreg.REG_SZ, cls.get_exe_path())
+                else:
+                    try:
+                        winreg.DeleteValue(key, cls.APP_NAME)
+                    except FileNotFoundError:
+                        pass
             return True
         except Exception:
             return False
