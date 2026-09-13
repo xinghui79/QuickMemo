@@ -1,6 +1,6 @@
-from PyQt5.QtWidgets import QWidget, QApplication
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QPainter, QColor
+from PyQt6.QtWidgets import QWidget, QApplication
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QPainter, QColor
 
 
 class EdgeSensor(QWidget):
@@ -9,14 +9,16 @@ class EdgeSensor(QWidget):
     # === 配置参数 ===
     THICKNESS = 6  # 贴边方向的厚度（细边）
     LENGTH = 80  # 平行于边缘方向的长度
-    SNAP_THRESHOLD = 30  # 吸附触发阈值
+    DEFAULT_Y_RATIO = 0.3  # 默认位置：距可用区域顶部的比例（0=顶 1=底）
 
     def __init__(self, tray_manager):
         super().__init__(
-            None, Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
+            None, Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint
+            | Qt.WindowType.Tool
         )
         self.tray_manager = tray_manager
-        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
         # 状态变量
         self.is_hovered = False  # 鼠标是否悬停
@@ -30,10 +32,10 @@ class EdgeSensor(QWidget):
         self._init_position()
 
     def _init_position(self):
-        """初始化感应条位置（默认右侧居中）"""
+        """初始化感应条位置（默认右侧偏上）"""
         screen = QApplication.primaryScreen().availableGeometry()
         x = screen.right() - self.THICKNESS
-        y = screen.center().y() - self.LENGTH // 2
+        y = int(screen.height() * self.DEFAULT_Y_RATIO) - self.LENGTH // 2
         self.move(x, y)
 
     # ================= 动态获取真实状态 =================
@@ -77,21 +79,21 @@ class EdgeSensor(QWidget):
         super().leaveEvent(event)
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self._press_pos = event.globalPos()
-            self._drag_pos = event.globalPos() - self.frameGeometry().topLeft()
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._press_pos = event.globalPosition().toPoint()
+            self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
-        if event.buttons() == Qt.LeftButton and self._drag_pos:
-            if (event.globalPos() - self._press_pos).manhattanLength() > 5:
-                self.move(event.globalPos() - self._drag_pos)
+        if event.buttons() & Qt.MouseButton.LeftButton and self._drag_pos:
+            if (event.globalPosition().toPoint() - self._press_pos).manhattanLength() > 5:
+                self.move(event.globalPosition().toPoint() - self._drag_pos)
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
-        if event.button() == Qt.LeftButton:
+        if event.button() == Qt.MouseButton.LeftButton and self._press_pos is not None:
             # 判断是点击还是拖动
-            if (event.globalPos() - self._press_pos).manhattanLength() <= 5:
+            if (event.globalPosition().toPoint() - self._press_pos).manhattanLength() <= 5:
                 self._toggle_windows()
             else:
                 self._snap_to_edge()
@@ -164,7 +166,7 @@ class EdgeSensor(QWidget):
     def paintEvent(self, event):
         """严格根据【三态逻辑】绘制感应条颜色"""
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         # 获取当前的三态状态
         state = self._get_sensor_state()
@@ -180,34 +182,22 @@ class EdgeSensor(QWidget):
             # 灰色：都没有隐藏（所有便签都在屏幕上）
             color = QColor(200, 200, 200, 120)  
 
-        painter.setPen(Qt.NoPen)
+        painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(color)
 
-        # --- 下面的绘制区域计算保持不变 ---
-        margin = 1
+        # 平时贴外边缘只画 4px，悬停时向屏幕内侧扩展到全厚 6px，形成可见的"变粗"反馈
         screen = QApplication.primaryScreen().availableGeometry()
+        t = self.THICKNESS if self.is_hovered else self.THICKNESS - 2
 
         if self.is_horizontal:
-            rect_x = margin
-            rect_y = margin if self.y() == screen.top() else 0
-            rect_w = self.width() - margin * 2
-            rect_h = self.THICKNESS - margin
+            rect_h = t
+            rect_w = self.width() - 2
+            rect_x = 1
+            rect_y = 0 if self.y() == screen.top() else self.height() - t
         else:
-            rect_x = margin if self.x() == screen.left() else 0
-            rect_y = margin
-            rect_w = self.THICKNESS - margin
-            rect_h = self.height() - margin * 2
+            rect_w = t
+            rect_h = self.height() - 2
+            rect_y = 1
+            rect_x = 0 if self.x() == screen.left() else self.width() - t
 
-        # 悬停时稍微变粗提示可点击（仅改变形状，不改变颜色）
-        if self.is_hovered:
-            if self.is_horizontal:
-                rect_h += 2
-                if self.y() != screen.top():
-                    rect_y -= 2
-            else:
-                rect_w += 2
-                if self.x() != screen.left():
-                    rect_x -= 2
-
-        # 绘制圆角矩形
         painter.drawRoundedRect(rect_x, rect_y, rect_w, rect_h, 3, 3)

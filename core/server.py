@@ -1,20 +1,12 @@
 import socket
-import logging
 
 SERVER_HOST = "127.0.0.1"
 SERVER_PORT = 65479
 
-def start_server(tray_manager):
-    """后台线程：监听其他进程的请求"""
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+def start_server(server_socket, tray_manager):
+    """后台线程：监听其他进程的请求（socket 已由主线程预先绑定，避免双实例竞态）"""
     server_socket.settimeout(1.0)
     tray_manager.server_socket = server_socket
-
-    try:
-        server_socket.bind((SERVER_HOST, SERVER_PORT))
-    except OSError as e:
-        logging.error(f"端口 {SERVER_PORT} 绑定失败（可能已有实例占用）: {e}")
-        return
 
     try:
         server_socket.listen(10)

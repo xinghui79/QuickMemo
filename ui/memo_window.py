@@ -1,15 +1,11 @@
-import json
-import logging
-from pathlib import Path
-from PyQt5.QtWidgets import (QMainWindow, QVBoxLayout, QWidget, QTextEdit, 
-                             QPushButton, QLabel, QHBoxLayout, QMessageBox, 
+from PyQt6.QtWidgets import (QMainWindow, QVBoxLayout, QWidget, QTextEdit,
+                             QPushButton, QLabel, QHBoxLayout, QMessageBox,
                              QSizeGrip, QApplication)
-from PyQt5.QtCore import Qt, QTimer, QStandardPaths
-from PyQt5.QtGui import QFont, QCursor
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont, QCursor
 
 class QuickMemo(QMainWindow):
     APP_NAME = "QuickMemo"
-    DEFAULT_CONTENT = ""
     WINDOW_WIDTH = 250
     WINDOW_HEIGHT = 180
 
@@ -97,7 +93,7 @@ class QuickMemo(QMainWindow):
         }
     """
 
-    def __init__(self, tray_manager=None, is_new=False):
+    def __init__(self, tray_manager=None):
         super().__init__()
         self.title_bar = None
         self.content_widget = None
@@ -107,39 +103,24 @@ class QuickMemo(QMainWindow):
         self.is_pinned = True
         self.pin_btn = None
 
-        self.config_path = self._get_config_path()
         self.setMinimumSize(180, 120)
-        self.current_content = self._load_data(skip_position=is_new)
         self._setup_ui()
-
-        self.save_timer = QTimer(self)
-        self.save_timer.setSingleShot(True)
-        self.save_timer.timeout.connect(self._save_data)
-        self.text_edit.textChanged.connect(self._on_text_changed)
 
         if tray_manager:
             self.tray_manager.add_window(self)
-
-    def _get_config_path(self) -> Path:
-        """获取跨平台的配置文件路径"""
-        doc_dir = QStandardPaths.writableLocation(QStandardPaths.DocumentsLocation)
-        config_dir = Path(doc_dir) / self.APP_NAME
-        config_dir.mkdir(parents=True, exist_ok=True)
-        return config_dir / f"settings_{self.window_id}.json"
 
     def _setup_ui(self):
         """构建用户界面"""
         # 窗口基础属性
         self.setWindowFlags(
-            Qt.FramelessWindowHint
-            | Qt.Tool
-            | Qt.CustomizeWindowHint
-            | Qt.WindowStaysOnTopHint
+            Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.Tool
+            | Qt.WindowType.CustomizeWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint
         )
-        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setWindowOpacity(0.8)
-        if not self.config_path.exists():
-            self.resize(self.WINDOW_WIDTH, self.WINDOW_HEIGHT)
+        self.resize(self.WINDOW_WIDTH, self.WINDOW_HEIGHT)
 
         # --- 标题栏 ---
         self.title_bar = self._create_title_bar()
@@ -152,7 +133,7 @@ class QuickMemo(QMainWindow):
         main_layout.addWidget(self.content_widget)
         container = QWidget()
         container.setLayout(main_layout)
-        container.setAttribute(Qt.WA_TranslucentBackground)
+        container.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setCentralWidget(container)
 
         self.size_grip = QSizeGrip(self)
@@ -190,13 +171,13 @@ class QuickMemo(QMainWindow):
         title_label = QLabel(self.APP_NAME)
         title_label.setStyleSheet("color: white; font-weight: bold;")
         title_label.setFont(QFont("Microsoft YaHei", 9))
-        title_label.setAlignment(Qt.AlignVCenter)
-        title_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+        title_label.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+        title_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
 
         add_btn = QPushButton("+")
         add_btn.setFixedSize(28, 28)
-        add_btn.setFont(QFont("Arial", 14, QFont.Bold))
-        add_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        add_btn.setFont(QFont("Arial", 14, QFont.Weight.Bold))
+        add_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         add_btn.setStyleSheet(self.STYLE_ADD_BTN)
         add_btn.setToolTip("新建便签")
         add_btn.clicked.connect(self.create_memo)
@@ -204,25 +185,25 @@ class QuickMemo(QMainWindow):
         self.pin_btn = QPushButton("▲")
         self.pin_btn.setFixedSize(28, 28)
         self.pin_btn.setFont(QFont("Segoe UI Emoji", 11))
-        self.pin_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self.pin_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         self.pin_btn.setToolTip("取消置顶" if self.is_pinned else "置顶便签")
         self.pin_btn.clicked.connect(self.toggle_pin)
-        # 根据加载的状态设置初始颜色
+        # 默认置顶，初始颜色为白色
         initial_color = "#FFFFFF" if self.is_pinned else "#666666"
         self.pin_btn.setStyleSheet(self.STYLE_PIN_BTN.format(color=initial_color))
 
         hide_btn = QPushButton("v")
         hide_btn.setFixedSize(28, 28)
-        hide_btn.setFont(QFont("Arial", 12, QFont.Bold))
-        hide_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        hide_btn.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        hide_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         hide_btn.setStyleSheet(self.STYLE_HIDE_BTN)
         hide_btn.setToolTip("隐藏便签")
         hide_btn.clicked.connect(self.hide_memo)
 
         close_btn = QPushButton("×")
         close_btn.setFixedSize(28, 28)
-        close_btn.setFont(QFont("Arial", 12, QFont.Bold))
-        close_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        close_btn.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        close_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         close_btn.setStyleSheet(self.STYLE_CLOSE_BTN)
         close_btn.setToolTip("销毁便签")
         close_btn.clicked.connect(self.delete_memo)
@@ -246,20 +227,15 @@ class QuickMemo(QMainWindow):
 
         self.text_edit = QTextEdit()
         self.text_edit.setPlaceholderText("请输入文字...")
-        self.text_edit.setPlainText(self.current_content)
         self.text_edit.setStyleSheet(self.STYLE_TEXT_EDIT)
         self.text_edit.setFont(QFont("Microsoft YaHei", 10))
-        self.text_edit.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.text_edit.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.text_edit.setLineWrapMode(QTextEdit.WidgetWidth)
+        self.text_edit.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.text_edit.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.text_edit.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
 
         layout.addWidget(self.text_edit)
 
         return widget
-
-    def _on_text_changed(self):
-        """文本改变时，重启 1.5 秒的防抖定时器"""
-        self.save_timer.start(1500)
 
     def resizeEvent(self, event):
         """重写窗口大小改变事件，确保 QSizeGrip 始终跟随右下角"""
@@ -278,14 +254,14 @@ class QuickMemo(QMainWindow):
         flags = self.windowFlags()
         if self.is_pinned:
             # 添加置顶标志
-            self.setWindowFlags(flags | Qt.WindowStaysOnTopHint)
+            self.setWindowFlags(flags | Qt.WindowType.WindowStaysOnTopHint)
             self.pin_btn.setStyleSheet(
                 self.STYLE_PIN_BTN.format(color="#FFFFFF")
             )
             self.pin_btn.setToolTip("取消置顶")
         else:
             # 移除置顶标志
-            self.setWindowFlags(flags & ~Qt.WindowStaysOnTopHint)
+            self.setWindowFlags(flags & ~Qt.WindowType.WindowStaysOnTopHint)
             self.pin_btn.setStyleSheet(
                 self.STYLE_PIN_BTN.format(color="#666666")
             )
@@ -294,73 +270,13 @@ class QuickMemo(QMainWindow):
         # 在 PyQt 中动态修改 WindowFlags 后，必须重新 show() 才能生效
         self.show()
 
-        # 立即触发保存，记住这个状态
-        self._save_data()
-
-    def _load_data(self, skip_position=False) -> str:
-        try:
-            if self.config_path.exists():
-                with open(self.config_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    content = data.get("content", self.DEFAULT_CONTENT)
-                    self.is_pinned = data.get("pinned", True)
-                    if not skip_position:
-                        x, y = data.get("x"), data.get("y")
-                        w, h = data.get("w"), data.get("h")
-                        w = max(w, 180) if w is not None else self.WINDOW_WIDTH
-                        h = max(h, 120) if h is not None else self.WINDOW_HEIGHT
-                        self.resize(w, h)
-                        if x is not None and y is not None:
-                            # 配置随 OneDrive 同步或显示器变化时，保存的坐标可能落在屏幕外
-                            screen = QApplication.primaryScreen().availableGeometry()
-                            x = max(screen.left() + 10, min(x, screen.right() - w - 10))
-                            y = max(screen.top() + 10, min(y, screen.bottom() - h - 10))
-                            self.move(x, y)
-                    return content
-        except Exception as e:
-            logging.warning(f"[Load Error] {e}")
-        return self.DEFAULT_CONTENT
-
-    def _save_data(self):
-        # 滑入动画期间坐标未就位（起点在屏幕外），写入会把中间位置固化到配置
-        if getattr(self, "_is_sliding_in", False):
-            return
-        content = self.text_edit.toPlainText()
-        geo = self.geometry()
-        temp_path = self.config_path.with_suffix(".tmp")
-        try:
-            with open(temp_path, "w", encoding="utf-8") as f:
-                json.dump(
-                    {
-                        "content": content,
-                        "x": geo.x(),
-                        "y": geo.y(),
-                        "w": geo.width(),
-                        "h": geo.height(),
-                        "pinned": self.is_pinned,
-                    },
-                    f,
-                    ensure_ascii=False,
-                    indent=2,
-                )
-            if self.config_path.exists():
-                self.config_path.unlink()
-            temp_path.rename(self.config_path)
-        except Exception as e:
-            logging.error(f"[Save Error] {e}")
-            if temp_path.exists():
-                temp_path.unlink()
-
     def create_memo(self):
         """新建便签"""
         if self.tray_manager:
-            self.tray_manager.create_new_window_slot()
+            self.tray_manager.create_new_memo()
 
     def hide_memo(self):
         """隐藏便签"""
-        if self.save_timer.isActive():
-            self.save_timer.stop()
-            self._save_data()
         self.hide()
         if self.tray_manager:
             self.tray_manager._sensor_timer.start(100)
@@ -373,28 +289,20 @@ class QuickMemo(QMainWindow):
                 self,
                 "QuickMemo提示",
                 "需保留至少一个便签\n退出程序请右键托盘图标",
-                QMessageBox.Ok,
+                buttons=QMessageBox.StandardButton.Ok,
             )
             return
-        if self.save_timer.isActive():
-            self.save_timer.stop()
-            self._save_data()
-        try:
-            if self.config_path.exists():
-                self.config_path.unlink()
-        except Exception as e:
-            logging.warning(f"删除配置文件失败: {e}")
         if self.tray_manager:
             self.tray_manager.remove_window(self)
         self.deleteLater()
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            child = self.childAt(event.pos())
+        if event.button() == Qt.MouseButton.LeftButton:
+            child = self.childAt(event.position().toPoint())
             if child == self.title_bar or (
                 child and child.parent() == self.title_bar and not isinstance(child, QPushButton)
             ):
-                self._drag_pos = event.globalPos() - self.frameGeometry().topLeft()
+                self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
                 event.accept()
             else:
                 # 明确忽略非标题栏的点击，让事件正常传递给 QTextEdit
@@ -402,16 +310,13 @@ class QuickMemo(QMainWindow):
 
     def mouseMoveEvent(self, event):
         # 增加 getattr 防护，极端情况下防止 _drag_pos 未定义报错
-        if event.buttons() == Qt.LeftButton and getattr(self, '_drag_pos', None) is not None:
-            self.move(event.globalPos() - self._drag_pos)
+        if event.buttons() & Qt.MouseButton.LeftButton and getattr(self, '_drag_pos', None) is not None:
+            self.move(event.globalPosition().toPoint() - self._drag_pos)
             event.accept()
 
     def mouseReleaseEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            dragged = self._drag_pos is not None
+        if event.button() == Qt.MouseButton.LeftButton:
             self._drag_pos = None
-            if dragged:
-                self.save_timer.start(300)
             event.accept()
 
     def closeEvent(self, event):

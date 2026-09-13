@@ -4,19 +4,22 @@ import logging
 from pathlib import Path
 from typing import List, Optional
 
-from PyQt5.QtWidgets import (QSystemTrayIcon, QMenu, QAction,
+from PyQt6.QtWidgets import (QSystemTrayIcon, QMenu,
                              QMessageBox, QApplication)
-from PyQt5.QtCore import (QObject, pyqtSignal, pyqtSlot, QTimer,
+from PyQt6.QtCore import (QObject, pyqtSignal, pyqtSlot, QTimer,
                           QPoint, QPropertyAnimation, QEasingCurve,
                           QStandardPaths)
-from PyQt5.QtGui import QIcon
+from PyQt6.QtGui import QAction, QIcon
 
 from core.autostart import AutoStartManager
-from core.hotkey import MOD_ALT, VK_M, HOTKEY_ID
+from core.hotkey import MOD_ALT, MOD_NOREPEAT, VK_M, HOTKEY_ID
 from ui.edge_sensor import EdgeSensor
 from ui.memo_window import QuickMemo
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+
+# 项目版本号：与 git 发布标签、README 版本徽章保持一致
+APP_VERSION = "1.2.0"
 
 class GlobalTrayManager(QObject):
     """QuickMemo 全局托盘与窗口管理器 (单例模式)"""
@@ -98,7 +101,7 @@ class GlobalTrayManager(QObject):
         """构建托盘右键菜单"""
         self.menu = QMenu()
         self.menu.addAction("显示所有便签", self.show_all_windows)
-        self.menu.addAction("新建便签", self.create_new_window_slot)
+        self.menu.addAction("新建便签", self.create_new_memo)
         
         self.action_auto_start = QAction("开机自动启动", self, checkable=True)
         self.action_auto_start.setChecked(AutoStartManager.is_enabled())
@@ -113,7 +116,7 @@ class GlobalTrayManager(QObject):
         """注册全局热键"""
         try:
             # 0 表示 None (NULL)
-            ctypes.windll.user32.RegisterHotKey(None, HOTKEY_ID, MOD_ALT, VK_M)
+            ctypes.windll.user32.RegisterHotKey(None, HOTKEY_ID, MOD_ALT | MOD_NOREPEAT, VK_M)
         except Exception as e:
             logging.error(f"全局热键注册失败 (可能被其他程序占用): {e}")
 
@@ -157,7 +160,7 @@ class GlobalTrayManager(QObject):
             base_x = screen.right() - QuickMemo.WINDOW_WIDTH - self.SCREEN_EDGE_MARGIN
             base_y = screen.top() + self.SCREEN_EDGE_MARGIN
 
-        new_window = QuickMemo(tray_manager=self, is_new=True)
+        new_window = QuickMemo(tray_manager=self)
         new_window.move(base_x, base_y)
         if hasattr(new_window, '_keep_on_screen'):
             new_window._keep_on_screen()
@@ -202,7 +205,7 @@ class GlobalTrayManager(QObject):
         animation.setDuration(duration)
         animation.setStartValue(start_pos)
         animation.setEndValue(target_pos)
-        animation.setEasingCurve(QEasingCurve.OutCubic)
+        animation.setEasingCurve(QEasingCurve.Type.OutCubic)
         
         # 动画结束后清理状态
         def on_slide_finished():
@@ -227,7 +230,7 @@ class GlobalTrayManager(QObject):
     
     @pyqtSlot()
     def create_new_window_slot(self):
-        """创建或恢复窗口"""
+        """唤醒便签（单例唤醒路径）：有隐藏的先召回，全部可见时才新建"""
         hidden_windows = [win for win in self.windows if win.isHidden()]
         if hidden_windows:
             for win in hidden_windows:
@@ -237,8 +240,13 @@ class GlobalTrayManager(QObject):
 
         self._create_blank_window(show=True)
 
+    def create_new_memo(self):
+        """真正新建一张空白便签（托盘菜单 / 标题栏 + 按钮）"""
+        self._create_blank_window(show=True)
+
     def on_activated(self, reason):
-        if reason in (QSystemTrayIcon.Trigger, QSystemTrayIcon.DoubleClick):
+        if reason in (QSystemTrayIcon.ActivationReason.Trigger,
+                      QSystemTrayIcon.ActivationReason.DoubleClick):
             self.show_all_windows()
 
     def toggle_all_windows_visibility(self):
@@ -274,8 +282,8 @@ class GlobalTrayManager(QObject):
         self._wipe_session_data()
 
     def _wipe_session_data(self):
-        """用完即走：会话结束不保留任何便签数据"""
-        doc_dir = QStandardPaths.writableLocation(QStandardPaths.DocumentsLocation)
+        """清理便签配置文件（历史版本会写入 Documents/QuickMemo，现版本已不再产生）"""
+        doc_dir = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DocumentsLocation)
         config_dir = Path(doc_dir) / QuickMemo.APP_NAME
 
         if config_dir.exists():
@@ -302,5 +310,8 @@ class GlobalTrayManager(QObject):
         self._unregister_global_hotkey()
         self._wipe_session_data()
 
-        self.app.quit()
+        # Qt6 的 quit() 会先逐个关闭顶层窗口，而便签的 closeEvent 拦截关闭
+        # （用于 Alt+F4 隐藏到托盘），会导致"几张便签就要点几次退出"。
+        # exit() 直接结束事件循环，一次退出。
+        self.app.exit(0)
 

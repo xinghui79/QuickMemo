@@ -5,8 +5,9 @@
     <em>随手记，随心隐，让灵感与思绪不再丢失。</em>
   </p>
   <p align="center">
-    <img src="https://img.shields.io/badge/Python-3.8+-blue.svg?style=flat-square" alt="Python">
-    <img src="https://img.shields.io/badge/PyQt5-5.15+-green.svg?style=flat-square" alt="PyQt5">
+    <img src="https://img.shields.io/badge/Python-3.10+-blue.svg?style=flat-square" alt="Python">
+    <img src="https://img.shields.io/badge/PyQt6-6.5+-green.svg?style=flat-square" alt="PyQt6">
+    <img src="https://img.shields.io/badge/Version-v1.2.0-orange.svg?style=flat-square" alt="Version">
     <img src="https://img.shields.io/badge/Platform-Windows%2010/11-blue.svg?style=flat-square" alt="Platform">
     <img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square" alt="License">
   </p>
@@ -30,7 +31,7 @@
 
 ### 1. 环境运行（开发者）
 
-确保您的系统已安装 Python 3.8 及以上版本。
+确保您的系统已安装 Python 3.10 及以上版本。
 
 ```bash
 # 克隆项目
@@ -74,15 +75,15 @@ pyinstaller --clean -y -D -w -n QuickMemo --icon=assets/icon.ico --add-data "ass
 
 ```
 QuickMemo/
-├── main.py               # 程序入口：单例检测、高 DPI 初始化、模块装配
+├── main.py               # 程序入口：单例检测、模块装配
 ├── core/
-│   ├── tray_manager.py   # 全局托盘与窗口管理器：生命周期、滑出动画、会话数据清理
+│   ├── tray_manager.py   # 全局托盘与窗口管理器：生命周期、滑出动画、旧数据清理
 │   ├── hotkey.py         # 全局热键 (Alt + M) 注册与响应
 │   ├── server.py         # 本地 Socket 服务，用于单例唤醒
 │   ├── autostart.py      # 开机自启（注册表读写）
 │   └── ...
 ├── ui/
-│   ├── memo_window.py    # 便签窗口：置顶、拖动、销毁、数据暂存
+│   ├── memo_window.py    # 便签窗口：新建、置顶、拖动、隐藏、销毁
 │   └── edge_sensor.py    # 屏幕右缘感应条
 ├── assets/
 │   └── icon.ico          # 应用图标
